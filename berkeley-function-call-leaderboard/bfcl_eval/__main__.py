@@ -57,12 +57,16 @@ def handle_multiple_input(input_str):
 
     return [item.strip() for item in ",".join(input_str).split(",") if item.strip()]
 
+
 @cli.command()
 def version():
     """
     Show the bfcl version. PyPI versions are in development, please rely on the commit hash for reproducibility.
     """
-    print(f"bfcl version: {_version('bfcl')} \nNote: pypi versions are in development, please rely on the commit hash for reproducibility.")
+    print(
+        f"bfcl version: {_version('bfcl')} \nNote: pypi versions are in development, please rely on the commit hash for reproducibility."
+    )
+
 
 @cli.command()
 def test_categories():
@@ -96,14 +100,14 @@ def models():
 @cli.command()
 def generate(
     model: List[str] = typer.Option(
-        ["gorilla-openfunctions-v2"], 
+        ["gorilla-openfunctions-v2"],
         help="A list of model names to generate the llm response. Use commas to separate multiple models.",
-        callback=handle_multiple_input
+        callback=handle_multiple_input,
     ),
     test_category: List[str] = typer.Option(
-        ["all"], 
+        ["all"],
         help="A list of test categories to run the evaluation on. Use commas to separate multiple test categories.",
-        callback=handle_multiple_input
+        callback=handle_multiple_input,
     ),
     temperature: float = typer.Option(
         0.001, help="The temperature parameter for the model."
@@ -119,8 +123,12 @@ def generate(
         help="Exclude info about the state of each API system after each turn in the inference log; only relevant for multi-turn categories.",
     ),
     num_gpus: int = typer.Option(1, help="The number of GPUs to use."),
-    num_threads: Optional[int] = typer.Option(None, help="The number of threads to use."),
-    gpu_memory_utilization: float = typer.Option(0.9, help="The GPU memory utilization."),
+    num_threads: Optional[int] = typer.Option(
+        None, help="The number of threads to use."
+    ),
+    gpu_memory_utilization: float = typer.Option(
+        0.9, help="The GPU memory utilization."
+    ),
     backend: str = typer.Option("sglang", help="The backend to use for the model."),
     skip_server_setup: bool = typer.Option(
         False,
@@ -148,6 +156,11 @@ def generate(
         "--run-ids",
         help="If true, also run the test entry mentioned in the test_case_ids_to_generate.json file, in addition to the --test_category argument.",
     ),
+    inference_model_name: Optional[str] = typer.Option(
+        None,
+        "--inference-model-name",
+        help="Model name to send in OpenAI-compatible inference requests. Use this to target a served base model name or a LoRA adapter alias such as 'myadapter'.",
+    ),
     enable_lora: bool = typer.Option(
         False,
         "--enable-lora",
@@ -170,6 +183,7 @@ def generate(
 
     args = SimpleNamespace(
         model=model,
+        inference_model_name=inference_model_name,
         test_category=test_category,
         temperature=temperature,
         include_input_log=include_input_log,
@@ -187,7 +201,9 @@ def generate(
         max_lora_rank=max_lora_rank,
         lora_modules=lora_modules,
     )
-    load_dotenv(dotenv_path=DOTENV_PATH, verbose=True, override=True)  # Load the .env file
+    load_dotenv(
+        dotenv_path=DOTENV_PATH, verbose=True, override=True
+    )  # Load the .env file
     generation_main(args)
 
 
@@ -234,7 +250,9 @@ def results(
         results_data.append(
             (
                 display_name(dir.name),
-                datetime.fromtimestamp(dir.stat().st_ctime).strftime("%Y-%m-%d %H:%M:%S"),
+                datetime.fromtimestamp(dir.stat().st_ctime).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
             )
         )
 
@@ -250,14 +268,12 @@ def results(
 @cli.command()
 def evaluate(
     model: List[str] = typer.Option(
-        None, 
-        help="A list of model names to evaluate.",
-        callback=handle_multiple_input
+        None, help="A list of model names to evaluate.", callback=handle_multiple_input
     ),
     test_category: List[str] = typer.Option(
-        ["all"], 
+        ["all"],
         help="A list of test categories to run the evaluation on.",
-        callback=handle_multiple_input
+        callback=handle_multiple_input,
     ),
     result_dir: str = typer.Option(
         None,
@@ -279,7 +295,9 @@ def evaluate(
     Evaluate results from run of one or more models on a test-category (same as eval_runner.py).
     """
 
-    load_dotenv(dotenv_path=DOTENV_PATH, verbose=True, override=True)  # Load the .env file
+    load_dotenv(
+        dotenv_path=DOTENV_PATH, verbose=True, override=True
+    )  # Load the .env file
     evaluation_main(model, test_category, result_dir, score_dir, partial_eval)
 
 

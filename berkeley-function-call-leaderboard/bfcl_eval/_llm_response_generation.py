@@ -28,7 +28,16 @@ from tqdm import tqdm
 def get_args():
     parser = argparse.ArgumentParser()
     # Refer to model_choice for supported models.
-    parser.add_argument("--model", type=str, default="gorilla-openfunctions-v2", nargs="+")
+    parser.add_argument(
+        "--model", type=str, default="gorilla-openfunctions-v2", nargs="+"
+    )
+    parser.add_argument(
+        "--inference-model-name",
+        type=str,
+        default=None,
+        help="Model name to send in OpenAI-compatible inference requests. Use this to target a served base model name or a LoRA adapter alias such as 'myadapter'.",
+    )
+
     # Refer to test_categories for supported categories.
     parser.add_argument("--test-category", type=str, default="all", nargs="+")
 
@@ -38,7 +47,9 @@ def get_args():
     parser.add_argument("--exclude-state-log", action="store_true", default=False)
     parser.add_argument("--num-threads", required=False, type=int)
     parser.add_argument("--num-gpus", default=1, type=int)
-    parser.add_argument("--backend", default="vllm", type=str, choices=["vllm", "sglang"])
+    parser.add_argument(
+        "--backend", default="vllm", type=str, choices=["vllm", "sglang"]
+    )
     parser.add_argument("--gpu-memory-utilization", default=0.9, type=float)
     parser.add_argument("--result-dir", default=None, type=str)
     parser.add_argument("--run-ids", action="store_true", default=False)
@@ -61,7 +72,7 @@ def get_args():
         type=str,
         default=None,
         nargs="*",
-        help="Specify the path to the LoRA modules for vLLM backend in name=\"path\" format. Can be specified multiple times.",
+        help='Specify the path to the LoRA modules for vLLM backend in name="path" format. Can be specified multiple times.',
     )
     parser.add_argument(
         "--enable-lora",
@@ -110,7 +121,9 @@ def get_involved_test_entries(test_category_args, run_ids):
     )
 
 
-def collect_test_cases(args, model_name, all_test_categories, all_test_entries_involved):
+def collect_test_cases(
+    args, model_name, all_test_categories, all_test_entries_involved
+):
     model_name_dir = model_name.replace("/", "_")
     model_result_dir = args.result_dir / model_name_dir
 
@@ -127,7 +140,9 @@ def collect_test_cases(args, model_name, all_test_categories, all_test_entries_i
             result_file_paths.append(
                 model_result_dir
                 / get_directory_structure_by_category(test_category)
-                / get_file_name_by_category(f"{test_category}_prereq", is_result_file=True)
+                / get_file_name_by_category(
+                    f"{test_category}_prereq", is_result_file=True
+                )
             )
 
         for file_path in result_file_paths:
@@ -165,7 +180,10 @@ def collect_test_cases(args, model_name, all_test_categories, all_test_entries_i
 
     # Skip format sensitivity test cases for FC models
     if (
-        any(is_format_sensitivity(test_category) for test_category in all_test_categories)
+        any(
+            is_format_sensitivity(test_category)
+            for test_category in all_test_categories
+        )
         and MODEL_CONFIG_MAPPING[model_name].is_fc_model
     ):
         test_cases_to_generate = [
@@ -264,6 +282,7 @@ def generate_results(args, model_name, test_cases_total):
                 lora_modules=args.lora_modules,
                 enable_lora=args.enable_lora,
                 max_lora_rank=args.max_lora_rank,
+                inference_model_name=args.inference_model_name,
             )
 
         # ───── dependency bookkeeping ──────────────────────────────
@@ -391,7 +410,9 @@ def main(args):
     else:
         tqdm.write(f"Running full test cases for categories: {all_test_categories}.")
 
-    if any(is_format_sensitivity(test_category) for test_category in all_test_categories):
+    if any(
+        is_format_sensitivity(test_category) for test_category in all_test_categories
+    ):
         for model_name in args.model:
             if MODEL_CONFIG_MAPPING[model_name].is_fc_model:
                 tqdm.write(

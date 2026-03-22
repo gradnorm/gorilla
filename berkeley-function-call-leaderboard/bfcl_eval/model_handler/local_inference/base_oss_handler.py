@@ -44,7 +44,10 @@ class OSSHandler(BaseHandler, EnforceOverrides):
 
         # Support custom base_url and api_key for remote/local OpenAI-compatible deployments (e.g., vLLM)
         # Use REMOTE_OPENAI_* variables to avoid conflicts with main OPENAI_* variables
-        self.base_url = os.getenv("REMOTE_OPENAI_BASE_URL", f"http://{self.local_server_endpoint}:{self.local_server_port}/v1")
+        self.base_url = os.getenv(
+            "REMOTE_OPENAI_BASE_URL",
+            f"http://{self.local_server_endpoint}:{self.local_server_port}/v1",
+        )
         self.api_key = os.getenv("REMOTE_OPENAI_API_KEY", "EMPTY")
         self.client = OpenAI(base_url=self.base_url, api_key=self.api_key)
 
@@ -82,6 +85,7 @@ class OSSHandler(BaseHandler, EnforceOverrides):
         lora_modules: Optional[list[str]] = None,
         enable_lora: bool = False,
         max_lora_rank: Optional[int] = None,
+        inference_model_name: Optional[str] = None,
     ):
         """
         Spin up a local server for the model.
@@ -105,6 +109,7 @@ class OSSHandler(BaseHandler, EnforceOverrides):
                     )
 
             self.model_path_or_id = local_model_path
+
             load_kwargs = {
                 "pretrained_model_name_or_path": self.model_path_or_id,
                 "local_files_only": True,
@@ -116,10 +121,13 @@ class OSSHandler(BaseHandler, EnforceOverrides):
                 "pretrained_model_name_or_path": self.model_path_or_id,
                 "trust_remote_code": True,
             }
+        self.inference_model_name = inference_model_name or self.model_name_huggingface
 
         # For remote OpenAI-compatible endpoints, use specified tokenizer path if provided
         is_remote_endpoint = bool(os.getenv("REMOTE_OPENAI_BASE_URL"))
-        tokenizer_path = os.getenv("REMOTE_OPENAI_TOKENIZER_PATH", self.model_path_or_id)
+        tokenizer_path = os.getenv(
+            "REMOTE_OPENAI_TOKENIZER_PATH", self.model_path_or_id
+        )
 
         if is_remote_endpoint and os.getenv("REMOTE_OPENAI_TOKENIZER_PATH"):
             # Use specified tokenizer for remote endpoints
@@ -130,9 +138,13 @@ class OSSHandler(BaseHandler, EnforceOverrides):
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(**tokenizer_kwargs)
                 config = AutoConfig.from_pretrained(**tokenizer_kwargs)
-                print(f"Loaded tokenizer from REMOTE_OPENAI_TOKENIZER_PATH: {tokenizer_path}")
+                print(
+                    f"Loaded tokenizer from REMOTE_OPENAI_TOKENIZER_PATH: {tokenizer_path}"
+                )
             except Exception as e:
-                print(f"Failed to load tokenizer from {tokenizer_path}, falling back to model path: {e}")
+                print(
+                    f"Failed to load tokenizer from {tokenizer_path}, falling back to model path: {e}"
+                )
                 self.tokenizer = AutoTokenizer.from_pretrained(**load_kwargs)
                 config = AutoConfig.from_pretrained(**load_kwargs)
         else:
@@ -183,7 +195,10 @@ class OSSHandler(BaseHandler, EnforceOverrides):
                         )
                         + (
                             sum(
-                                [["--lora-modules", lora_module] for lora_module in lora_modules],
+                                [
+                                    ["--lora-modules", lora_module]
+                                    for lora_module in lora_modules
+                                ],
                                 [],
                             )
                             if lora_modules
@@ -228,10 +243,12 @@ class OSSHandler(BaseHandler, EnforceOverrides):
 
                 # Start threads to read and print stdout and stderr
                 stdout_thread = threading.Thread(
-                    target=log_subprocess_output, args=(process.stdout, self._stop_event)
+                    target=log_subprocess_output,
+                    args=(process.stdout, self._stop_event),
                 )
                 stderr_thread = threading.Thread(
-                    target=log_subprocess_output, args=(process.stderr, self._stop_event)
+                    target=log_subprocess_output,
+                    args=(process.stderr, self._stop_event),
                 )
                 stdout_thread.setDaemon(True)
                 stderr_thread.setDaemon(True)
@@ -344,7 +361,7 @@ class OSSHandler(BaseHandler, EnforceOverrides):
         start_time = time.time()
         if len(extra_body) > 0:
             api_response = self.client.completions.create(
-                model=self.model_path_or_id,
+                model=self.inference_model_name,
                 temperature=self.temperature,
                 prompt=formatted_prompt,
                 max_tokens=leftover_tokens_count,
@@ -353,7 +370,7 @@ class OSSHandler(BaseHandler, EnforceOverrides):
             )
         else:
             api_response = self.client.completions.create(
-                model=self.model_path_or_id,
+                model=self.inference_model_name,
                 temperature=self.temperature,
                 prompt=formatted_prompt,
                 max_tokens=leftover_tokens_count,
@@ -407,7 +424,10 @@ class OSSHandler(BaseHandler, EnforceOverrides):
 
     @override
     def _add_execution_results_prompting(
-        self, inference_data: dict, execution_results: list[str], model_response_data: dict
+        self,
+        inference_data: dict,
+        execution_results: list[str],
+        model_response_data: dict,
     ) -> dict:
         for execution_result, decoded_model_response in zip(
             execution_results, model_response_data["model_responses_decoded"]
