@@ -77,9 +77,8 @@ Repository = "https://github.com/ShishirPatil/gorilla/tree/main/berkeley-functio
 [project.optional-dependencies]
 oss_eval_vllm = [
     "vllm==0.8.5",
-    "transformers>=4.56,<5",
-    "tokenizers>=0.22,<0.24",
-    "soundfile",
+    "transformers<4.56",
+    "tokenizers<0.22",
 ]
 oss_eval_sglang = ["sglang[all]"]
 wandb = ["wandb==0.18.5"]
