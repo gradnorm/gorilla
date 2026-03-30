@@ -285,6 +285,11 @@ def evaluate(
         "--score-dir",
         help="Relative path to the evaluation score folder, if different from the default; Path should be relative to the `berkeley-function-call-leaderboard` root folder",
     ),
+    model_result_dir: str = typer.Option(
+        None,
+        "--model-result-dir",
+        help="Override the model result subdirectory to evaluate instead of using the default folder derived from --model.",
+    ),
     partial_eval: bool = typer.Option(
         False,
         "--partial-eval",
@@ -298,7 +303,9 @@ def evaluate(
     load_dotenv(
         dotenv_path=DOTENV_PATH, verbose=True, override=True
     )  # Load the .env file
-    evaluation_main(model, test_category, result_dir, score_dir, partial_eval)
+    evaluation_main(
+        model, test_category, result_dir, score_dir, partial_eval, model_result_dir
+    )
 
 
 @cli.command()

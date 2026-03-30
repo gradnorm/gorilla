@@ -57,7 +57,11 @@ def ast_checker(
             }
 
         return simple_function_checker(
-            func_description[0], model_output[0], possible_answer[0], language, model_name
+            func_description[0],
+            model_output[0],
+            possible_answer[0],
+            language,
+            model_name,
         )
 
 
@@ -409,20 +413,30 @@ def simple_function_checker(
             expected_type_converted = JS_TYPE_CONVERSION[expected_type_description]
 
             if expected_type_description in JS_TYPE_CONVERSION:
-                if type(value) != str:
+                # JS parser outputs may already be normalized into native Python
+                # values, e.g. `true` -> True. In that case, accept the parsed
+                # value directly and skip JS string-literal conversion.
+                if type(value) == expected_type_converted:
+                    pass
+                # gradnorm: Allow JS int values for float parameters, matching Python evaluator behavior
+                elif expected_type_description == "float" and type(value) == int:
+                    pass
+                elif type(value) != str:
                     result["valid"] = False
                     result["error"].append(
-                        f"Incorrect type for parameter {repr(param)}. Expected type String, got {type(value).__name__}. Parameter value: {repr(value)}."
+                        f"Incorrect type for parameter {repr(param)}. Expected type {expected_type_description}, got {type(value).__name__}. Parameter value: {repr(value)}."
                     )
                     result["error_type"] = "type_error:js"
                     return result
-
-                if expected_type_description in NESTED_CONVERSION_TYPE_LIST:
-                    nested_type = param_details[param]["items"]["type"]
-                    nested_type_converted = JS_TYPE_CONVERSION[nested_type]
-                    value = js_type_converter(value, expected_type_description, nested_type)
                 else:
-                    value = js_type_converter(value, expected_type_description)
+                    if expected_type_description in NESTED_CONVERSION_TYPE_LIST:
+                        nested_type = param_details[param]["items"]["type"]
+                        nested_type_converted = JS_TYPE_CONVERSION[nested_type]
+                        value = js_type_converter(
+                            value, expected_type_description, nested_type
+                        )
+                    else:
+                        value = js_type_converter(value, expected_type_description)
 
         elif language == Language.PYTHON:
             expected_type_converted = PYTHON_TYPE_MAPPING[expected_type_description]
@@ -438,6 +452,15 @@ def simple_function_checker(
         # This does introduce some false positive (eg, when the model provides a list value instead of tuple). We hope to find a better solution in the future.
         if expected_type_description == "tuple" and type(value) == tuple:
             value = list(value)
+
+        # gradnorm: Mirror Python int-to-float coercion for JS float params
+        # Allow javascript auto conversion from int to float, mirroring Python behavior
+        if (
+            language == Language.JAVASCRIPT
+            and expected_type_description == "float"
+            and type(value) == int
+        ):
+            value = float(value)
 
         # Allow python auto conversion from int to float
         if (

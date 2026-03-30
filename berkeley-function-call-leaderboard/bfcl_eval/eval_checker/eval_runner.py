@@ -757,7 +757,12 @@ def evaluate_task(
 
 
 def runner(
-    model_names, test_categories, result_dir, score_dir, allow_missing: bool = False
+    model_names,
+    test_categories,
+    result_dir,
+    score_dir,
+    allow_missing: bool = False,
+    model_dir_aliases: dict[str, str] | None = None,
 ):
 
     # A dictionary to store the evaluation scores.
@@ -775,13 +780,18 @@ def runner(
     # Traverse each subdirectory
     for subdir in tqdm(subdirs, desc="Number of models evaluated"):
 
-        model_name = subdir.relative_to(result_dir).name
-        if model_names is not None and model_name not in model_names:
+        result_subdir_name = subdir.relative_to(result_dir).name
+        if model_names is not None and result_subdir_name not in model_names:
             continue
 
-        model_name_escaped = model_name.replace("_", "/")
+        canonical_model_name = (
+            model_dir_aliases.get(result_subdir_name, result_subdir_name)
+            if model_dir_aliases is not None
+            else result_subdir_name
+        )
+        model_name_escaped = canonical_model_name.replace("_", "/")
 
-        print(f"🦍 Model: {model_name}")
+        print(f"🦍 Model: {canonical_model_name}")
 
         # Find and process all result JSON files recursively in the subdirectory
         for model_result_json in subdir.rglob(RESULT_FILE_PATTERN):
@@ -807,7 +817,7 @@ def runner(
                 result_dir,
                 score_dir,
                 model_result,
-                model_name,
+                canonical_model_name,
                 handler,
                 leaderboard_table,
                 allow_missing=allow_missing,
@@ -821,7 +831,14 @@ def runner(
     generate_leaderboard_csv(leaderboard_table, score_dir)
 
 
-def main(model, test_categories, result_dir, score_dir, partial_eval: bool = False):
+def main(
+    model,
+    test_categories,
+    result_dir,
+    score_dir,
+    partial_eval: bool = False,
+    model_result_dir: str = None,
+):
     if result_dir is None:
         result_dir = RESULT_PATH
     else:
@@ -838,15 +855,22 @@ def main(model, test_categories, result_dir, score_dir, partial_eval: bool = Fal
     all_test_categories = parse_test_category_argument(test_categories)
 
     model_names = None
+    model_dir_aliases = None
     if model:
         model_names = []
+        model_dir_aliases = {}
         for model_name in model:
             if model_name not in MODEL_CONFIG_MAPPING:
                 raise ValueError(f"Invalid model name '{model_name}'.")
+            canonical_result_dir = model_name.replace("/", "_")
             # Runner takes in the model name that contains "_", instead of "/", for the sake of file path issues.
             # This is differnet than the model name format that the generation script "openfunctions_evaluation.py" takes in (where the name contains "/").
             # We patch it here to avoid confusing the user.
-            model_names.append(model_name.replace("/", "_"))
+            result_dir_name = (
+                model_result_dir if model_result_dir is not None else canonical_result_dir
+            )
+            model_names.append(result_dir_name)
+            model_dir_aliases[result_dir_name] = canonical_result_dir
 
     # Driver function to run the evaluation for all categories involved.
     runner(
@@ -855,6 +879,7 @@ def main(model, test_categories, result_dir, score_dir, partial_eval: bool = Fal
         result_dir,
         score_dir,
         allow_missing=partial_eval,
+        model_dir_aliases=model_dir_aliases,
     )
 
     print(
@@ -896,6 +921,12 @@ if __name__ == "__main__":
         help="Path to the folder where the evaluation score files will be stored; relative to the `berkeley-function-call-leaderboard` root folder",
     )
     parser.add_argument(
+        "--model-result-dir",
+        default=None,
+        type=str,
+        help="Override the model result subdirectory to evaluate instead of using the default folder derived from --model.",
+    )
+    parser.add_argument(
         "--partial-eval",
         default=False,
         action="store_true",
@@ -911,4 +942,5 @@ if __name__ == "__main__":
         args.result_dir,
         args.score_dir,
         partial_eval=args.partial_eval,
+        model_result_dir=args.model_result_dir,
     )
