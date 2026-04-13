@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import threading
 import time
@@ -50,6 +51,35 @@ class OSSHandler(BaseHandler, EnforceOverrides):
         )
         self.api_key = os.getenv("REMOTE_OPENAI_API_KEY", "EMPTY")
         self.client = OpenAI(base_url=self.base_url, api_key=self.api_key)
+
+    @staticmethod
+    def _safe_prompt_log_part(value: Any) -> str:
+        value = "unknown" if value is None else str(value)
+        return re.sub(r"[^A-Za-z0-9_.=-]+", "_", value).strip("_") or "unknown"
+
+    def _maybe_log_formatted_prompt(
+        self, inference_data: dict, formatted_prompt: str
+    ) -> None:
+        if os.getenv("BFCL_LOG_PROMPTS") != "1":
+            return
+
+        prompt_log_dir = Path(os.getenv("BFCL_PROMPT_LOG_DIR", "prompt_logs"))
+        prompt_log_dir.mkdir(parents=True, exist_ok=True)
+
+        test_id = self._safe_prompt_log_part(inference_data.get("_bfcl_test_id"))
+        test_category = self._safe_prompt_log_part(
+            inference_data.get("_bfcl_test_category")
+        )
+        turn_idx = self._safe_prompt_log_part(inference_data.get("_bfcl_turn_idx"))
+        step_idx = self._safe_prompt_log_part(inference_data.get("_bfcl_step_idx"))
+        timestamp = time.time_ns()
+
+        prompt_path = (
+            prompt_log_dir
+            / f"{test_category}__{test_id}__turn_{turn_idx}__step_{step_idx}__{timestamp}.txt"
+        )
+        prompt_path.write_text(formatted_prompt, encoding="utf-8")
+        inference_data["prompt_log_path"] = str(prompt_path)
 
     @override
     def inference(
@@ -338,6 +368,7 @@ class OSSHandler(BaseHandler, EnforceOverrides):
 
         formatted_prompt: str = self._format_prompt(message, function)
         inference_data["inference_input_log"] = {"formatted_prompt": formatted_prompt}
+        self._maybe_log_formatted_prompt(inference_data, formatted_prompt)
 
         # Tokenize the formatted prompt to get token count
         input_token_count = len(self.tokenizer.tokenize(formatted_prompt))

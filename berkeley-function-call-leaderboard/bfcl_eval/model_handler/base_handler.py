@@ -508,6 +508,10 @@ class BaseHandler:
                 current_step_inference_log: list[dict] = []
                 # Add to the current_turn_inference_log at beginning of each step so that we don't need to bother dealing with the break statements
                 current_turn_inference_log[f"step_{count}"] = current_step_inference_log
+                inference_data["_bfcl_test_id"] = test_entry_id
+                inference_data["_bfcl_test_category"] = test_category
+                inference_data["_bfcl_turn_idx"] = turn_idx
+                inference_data["_bfcl_step_idx"] = count
 
                 api_response, query_latency = self._query_prompting(inference_data)
 
@@ -726,6 +730,10 @@ class BaseHandler:
         inference_data = self.add_first_turn_message_prompting(
             inference_data, test_entry["question"][0]
         )
+        inference_data["_bfcl_test_id"] = test_entry["id"]
+        inference_data["_bfcl_test_category"] = test_entry["id"].rsplit("_", 1)[0]
+        inference_data["_bfcl_turn_idx"] = 0
+        inference_data["_bfcl_step_idx"] = 0
 
         api_response, query_latency = self._query_prompting(inference_data)
 
