@@ -40,6 +40,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional stop sequence. Can be passed multiple times.",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print repr(text), finish reason, and usage metadata.",
+    )
     return parser.parse_args()
 
 
@@ -66,7 +71,19 @@ def main() -> None:
         stop=args.stop,
     )
 
-    print(response.choices[0].text, end="")
+    text = response.choices[0].text
+
+    if args.debug:
+        print("=== TEXT repr ===")
+        print(repr(text))
+        print("\n=== TEXT ===")
+        print(text)
+        print("\n=== FINISH REASON ===")
+        print(response.choices[0].finish_reason)
+        print("\n=== USAGE ===")
+        print(response.usage)
+    else:
+        print(text, end="")
 
 
 if __name__ == "__main__":
