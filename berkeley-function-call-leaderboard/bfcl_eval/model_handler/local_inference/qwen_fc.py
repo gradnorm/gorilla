@@ -1,5 +1,6 @@
 import json
 import re
+from copy import deepcopy
 from typing import Any
 
 from bfcl_eval.model_handler.local_inference.base_oss_handler import OSSHandler
@@ -19,6 +20,40 @@ class QwenFCHandler(OSSHandler):
     ) -> None:
         super().__init__(model_name, temperature, registry_name, is_fc_model, **kwargs)
         self.model_name_huggingface = model_name
+
+    @staticmethod
+    def _render_file_system_context(initial_config: dict) -> str:
+        """Render BFCL GorillaFileSystem initial state for the model prompt."""
+        file_system = initial_config.get("GorillaFileSystem", {})
+        root = file_system.get("root", {})
+        if not root:
+            return ""
+
+        lines = ["<file_system>"]
+
+        def append_node(path: str, node: dict) -> None:
+            node_type = node.get("type")
+            if node_type == "directory":
+                lines.append(f"- {path}/")
+                for name, child in node.get("contents", {}).items():
+                    append_node(f"{path}/{name}".replace("//", "/"), child)
+            elif node_type == "file":
+                content = str(node.get("content", ""))
+                preview = content.replace("\n", "\\n")
+                if len(preview) > 200:
+                    preview = preview[:200] + "..."
+                lines.append(f'- {path}: "{preview}"')
+
+        root_names = list(root.keys())
+        for root_name in root_names:
+            root_node = root[root_name]
+            append_node(f"/{root_name}", root_node)
+
+        # GorillaFileSystem starts at the loaded root directory.
+        lines.append("")
+        lines.append(f"Current directory: /{root_names[0]}")
+        lines.append("</file_system>")
+        return "\n".join(lines)
 
     @override
     def decode_ast(self, result, language, has_tool_call_tag):
@@ -241,10 +276,35 @@ class QwenFCHandler(OSSHandler):
     @override
     def _pre_query_processing_prompting(self, test_entry: dict) -> dict:
         functions: list = test_entry["function"]
+        file_system_context = self._render_file_system_context(
+            test_entry.get("initial_config", {})
+        )
 
         # FC models use its own system prompt, so no need to add any message
 
-        return {"message": [], "function": functions}
+        return {
+            "message": [],
+            "function": functions,
+            "file_system_context": file_system_context,
+        }
+
+    @override
+    def add_first_turn_message_prompting(
+        self, inference_data: dict, first_turn_message: list[dict]
+    ) -> dict:
+        messages = deepcopy(first_turn_message)
+        file_system_context = inference_data.get("file_system_context", "")
+
+        if file_system_context:
+            for message in messages:
+                if message.get("role") == "user":
+                    message["content"] = (
+                        f"{file_system_context}\n\n{message.get('content', '')}"
+                    )
+                    break
+
+        inference_data["message"].extend(messages)
+        return inference_data
 
     @override
     def _parse_query_response_prompting(self, api_response: Any) -> dict:
