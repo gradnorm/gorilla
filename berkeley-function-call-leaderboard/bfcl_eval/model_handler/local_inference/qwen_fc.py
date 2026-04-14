@@ -55,6 +55,74 @@ class QwenFCHandler(OSSHandler):
         lines.append("</file_system>")
         return "\n".join(lines)
 
+    @staticmethod
+    def _render_trading_state_context(initial_config: dict) -> str:
+        """Render compact BFCL TradingBot initial state for the model prompt."""
+        trading_state = initial_config.get("TradingBot", {})
+        if not trading_state:
+            return ""
+
+        account_info = trading_state.get("account_info", {})
+        orders = trading_state.get("orders", {})
+        watch_list = trading_state.get("watch_list", [])
+        stocks = trading_state.get("stocks", {})
+
+        def format_order(order_id: Any, order: Any) -> str | None:
+            if not isinstance(order, dict):
+                return None
+
+            symbol = order.get("symbol", "unknown")
+            status = order.get("status", "unknown")
+            order_type = order.get("order_type", order.get("type", "unknown"))
+            amount = order.get("amount", order.get("num_shares", order.get("shares")))
+            price = order.get("price")
+
+            details = [str(order_id), str(symbol), str(status)]
+            if order_type != "unknown":
+                details.append(str(order_type))
+            if amount is not None:
+                details.append(f"shares={amount}")
+            if price is not None:
+                details.append(f"price={price}")
+            return ":".join(details)
+
+        formatted_orders = [
+            formatted_order(order_id, order)
+            for order_id, order in orders.items()
+            if isinstance(order, dict)
+        ]
+        formatted_orders = [order for order in formatted_orders if order]
+
+        lines = ["<trading_state>"]
+        lines.append(f"Authenticated: {trading_state.get('authenticated', 'unknown')}")
+        lines.append(f"Market status: {trading_state.get('market_status', 'unknown')}")
+        if "balance" in account_info:
+            lines.append(f"Balance: {account_info['balance']}")
+        if watch_list:
+            lines.append(f"Watchlist: {', '.join(map(str, watch_list))}")
+        else:
+            lines.append("Watchlist: empty")
+        if formatted_orders:
+            lines.append(f"Orders: {', '.join(formatted_orders)}")
+        else:
+            lines.append("Orders: empty")
+        if stocks:
+            lines.append(f"Available stocks: {', '.join(sorted(map(str, stocks.keys())))}")
+        lines.append("</trading_state>")
+        return "\n".join(lines)
+
+    @classmethod
+    def _render_environment_context(cls, initial_config: dict) -> str:
+        blocks = [
+            cls._render_file_system_context(initial_config),
+            cls._render_trading_state_context(initial_config),
+        ]
+        blocks = [block for block in blocks if block]
+        if not blocks:
+            return ""
+
+        return "<environment_context>\n" + "\n\n".join(blocks) + "\n</environment_context>"
+
     @override
     def decode_ast(self, result, language, has_tool_call_tag):
         # Model response is of the form:
@@ -276,7 +344,7 @@ class QwenFCHandler(OSSHandler):
     @override
     def _pre_query_processing_prompting(self, test_entry: dict) -> dict:
         functions: list = test_entry["function"]
-        file_system_context = self._render_file_system_context(
+        environment_context = self._render_environment_context(
             test_entry.get("initial_config", {})
         )
 
@@ -285,7 +353,7 @@ class QwenFCHandler(OSSHandler):
         return {
             "message": [],
             "function": functions,
-            "file_system_context": file_system_context,
+            "environment_context": environment_context,
         }
 
     @override
@@ -293,13 +361,13 @@ class QwenFCHandler(OSSHandler):
         self, inference_data: dict, first_turn_message: list[dict]
     ) -> dict:
         messages = deepcopy(first_turn_message)
-        file_system_context = inference_data.get("file_system_context", "")
+        environment_context = inference_data.get("environment_context", "")
 
-        if file_system_context:
+        if environment_context:
             for message in messages:
                 if message.get("role") == "user":
                     message["content"] = (
-                        f"{file_system_context}\n\n{message.get('content', '')}"
+                        f"{environment_context}\n\n{message.get('content', '')}"
                     )
                     break
 
