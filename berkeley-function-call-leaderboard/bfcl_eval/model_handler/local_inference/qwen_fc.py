@@ -111,11 +111,78 @@ class QwenFCHandler(OSSHandler):
         lines.append("</trading_state>")
         return "\n".join(lines)
 
+    @staticmethod
+    def _render_vehicle_state_context(initial_config: dict) -> str:
+        """Render compact BFCL VehicleControlAPI initial state for the model prompt."""
+        vehicle_state = initial_config.get("VehicleControlAPI", {})
+        if not vehicle_state:
+            return ""
+
+        door_status = vehicle_state.get("doorStatus", {})
+        if isinstance(door_status, dict):
+            doors = ", ".join(
+                f"{door}:{status}" for door, status in door_status.items()
+            )
+            remaining_unlocked_doors = vehicle_state.get(
+                "remainingUnlockedDoors",
+                sum(1 for status in door_status.values() if status == "unlocked"),
+            )
+        else:
+            doors = str(door_status)
+            remaining_unlocked_doors = vehicle_state.get(
+                "remainingUnlockedDoors", "unknown"
+            )
+
+        lines = ["<vehicle_state>"]
+        lines.append(f"Engine: {vehicle_state.get('engineState', 'unknown')}")
+        lines.append(f"Fuel level: {vehicle_state.get('fuelLevel', 'unknown')} gallons")
+        lines.append(
+            f"Battery voltage: {vehicle_state.get('batteryVoltage', 'unknown')} V"
+        )
+        lines.append(f"Doors: {doors}")
+        lines.append(f"Remaining unlocked doors: {remaining_unlocked_doors}")
+        lines.append(
+            "Climate: "
+            f"{vehicle_state.get('acTemperature', 'unknown')} C, "
+            f"fan {vehicle_state.get('fanSpeed', 'unknown')}, "
+            f"mode {vehicle_state.get('acMode', 'unknown')}, "
+            f"humidity {vehicle_state.get('humidityLevel', 'unknown')}"
+        )
+        lines.append(f"Headlights: {vehicle_state.get('headLightStatus', 'unknown')}")
+        lines.append(
+            "Parking brake: "
+            f"{vehicle_state.get('parkingBrakeStatus', 'unknown')}, "
+            f"force {vehicle_state.get('parkingBrakeForce', 'unknown')}, "
+            f"slope {vehicle_state.get('slopeAngle', 'unknown')}"
+        )
+        lines.append(
+            "Brake pedal: "
+            f"{vehicle_state.get('brakePedalStatus', 'unknown')}, "
+            f"force {vehicle_state.get('brakePedalForce', 'unknown')}"
+        )
+        lines.append(
+            "Cruise control: "
+            f"{vehicle_state.get('cruiseStatus', 'unknown')}, "
+            f"distance to next vehicle "
+            f"{vehicle_state.get('distanceToNextVehicle', 'unknown')}"
+        )
+        lines.append(f"Destination: {vehicle_state.get('destination', 'unknown')}")
+        lines.append(
+            "Tire pressure: "
+            f"front_left={vehicle_state.get('frontLeftTirePressure', 'unknown')}, "
+            f"front_right={vehicle_state.get('frontRightTirePressure', 'unknown')}, "
+            f"rear_left={vehicle_state.get('rearLeftTirePressure', 'unknown')}, "
+            f"rear_right={vehicle_state.get('rearRightTirePressure', 'unknown')}"
+        )
+        lines.append("</vehicle_state>")
+        return "\n".join(lines)
+
     @classmethod
     def _render_environment_context(cls, initial_config: dict) -> str:
         blocks = [
             cls._render_file_system_context(initial_config),
             cls._render_trading_state_context(initial_config),
+            cls._render_vehicle_state_context(initial_config),
         ]
         blocks = [block for block in blocks if block]
         if not blocks:
