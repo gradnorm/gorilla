@@ -87,7 +87,7 @@ class QwenFCHandler(OSSHandler):
             return ":".join(details)
 
         formatted_orders = [
-            formatted_order(order_id, order)
+            format_order(order_id, order)
             for order_id, order in orders.items()
             if isinstance(order, dict)
         ]
