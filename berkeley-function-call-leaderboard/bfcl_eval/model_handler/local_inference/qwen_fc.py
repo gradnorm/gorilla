@@ -380,14 +380,15 @@ class QwenFCHandler(OSSHandler):
                         if "function" in tool_call:
                             tool_call = tool_call["function"]
                         
+                        arguments = tool_call.get("arguments", {})
                         formatted_prompt += '<tool_call>\n{"name": "'
                         formatted_prompt += tool_call["name"]
                         formatted_prompt += '", "arguments": '
                         
-                        if isinstance(tool_call["arguments"], str):
-                            formatted_prompt += tool_call["arguments"]
+                        if isinstance(arguments, str):
+                            formatted_prompt += arguments
                         else:
-                            formatted_prompt += json.dumps(tool_call["arguments"])
+                            formatted_prompt += json.dumps(arguments)
                         
                         formatted_prompt += "}\n</tool_call>"
 
@@ -495,6 +496,8 @@ class QwenFCHandler(OSSHandler):
         for match in matches:
             try:
                 match = json.loads(match)
+                if isinstance(match, dict) and "name" in match:
+                    match.setdefault("arguments", {})
                 result.append(match)
             except Exception as e:
                 pass
