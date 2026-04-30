@@ -1,3 +1,4 @@
+import os
 import json
 import re
 from copy import deepcopy
@@ -9,6 +10,8 @@ from overrides import override
 
 
 class QwenFCHandler(OSSHandler):
+    VEHICLE_ENV_CONTEXT_FLAG = "ENABLE_VEHICLE_ENV_CONTEXT"
+
     def __init__(
         self,
         model_name,
@@ -178,12 +181,18 @@ class QwenFCHandler(OSSHandler):
         return "\n".join(lines)
 
     @classmethod
+    def _vehicle_env_context_enabled(cls) -> bool:
+        value = os.getenv(cls.VEHICLE_ENV_CONTEXT_FLAG, "1").strip().lower()
+        return value not in {"0", "false", "no", "off"}
+
+    @classmethod
     def _render_environment_context(cls, initial_config: dict) -> str:
         blocks = [
             cls._render_file_system_context(initial_config),
             cls._render_trading_state_context(initial_config),
-            cls._render_vehicle_state_context(initial_config),
         ]
+        if cls._vehicle_env_context_enabled():
+            blocks.append(cls._render_vehicle_state_context(initial_config))
         blocks = [block for block in blocks if block]
         if not blocks:
             return ""
