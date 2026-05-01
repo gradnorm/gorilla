@@ -10,6 +10,7 @@ from overrides import override
 
 
 class QwenFCHandler(OSSHandler):
+    ENVIRONMENT_CONTEXT_FLAG = "ENABLE_ENVIRONMENT_CONTEXT"
     VEHICLE_ENV_CONTEXT_FLAG = "ENABLE_VEHICLE_ENV_CONTEXT"
 
     def __init__(
@@ -186,7 +187,15 @@ class QwenFCHandler(OSSHandler):
         return value not in {"0", "false", "no", "off"}
 
     @classmethod
+    def _environment_context_enabled(cls) -> bool:
+        value = os.getenv(cls.ENVIRONMENT_CONTEXT_FLAG, "1").strip().lower()
+        return value not in {"0", "false", "no", "off"}
+
+    @classmethod
     def _render_environment_context(cls, initial_config: dict) -> str:
+        if not cls._environment_context_enabled():
+            return ""
+
         blocks = [
             cls._render_file_system_context(initial_config),
             cls._render_trading_state_context(initial_config),
